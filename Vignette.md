@@ -113,7 +113,7 @@ mcmc_nngp_list = mcmc_nngp_initialize(observed_locs = locs, observed_field = obs
                                             seed = 1)
 ```
 
-    ## [1] "Setup done, 1.40438795089722 s elapsed"
+    ## [1] "Setup done, 1.23651695251465 s elapsed"
 
 What is there in the list we just created ?
 -------------------------------------------
@@ -538,7 +538,7 @@ print(mcmc_nngp_list$records)
     ## $chain_1
     ## $chain_1$iterations
     ##      iteration     time
-    ## [1,]         0 1.403749
+    ## [1,]         0 1.235978
     ## 
     ## $chain_1$params
     ## list()
@@ -547,7 +547,7 @@ print(mcmc_nngp_list$records)
     ## $chain_2
     ## $chain_2$iterations
     ##      iteration     time
-    ## [1,]         0 1.404277
+    ## [1,]         0 1.236422
     ## 
     ## $chain_2$params
     ## list()
@@ -556,7 +556,7 @@ print(mcmc_nngp_list$records)
     ## $chain_3
     ## $chain_3$iterations
     ##      iteration     time
-    ## [1,]         0 1.404335
+    ## [1,]         0 1.236476
     ## 
     ## $chain_3$params
     ## list()
@@ -581,7 +581,7 @@ Miscellaneous
 print(mcmc_nngp_list$t_begin) # the time setup was done 
 ```
 
-    ## [1] "2020-09-22 13:20:21 CEST"
+    ## [1] "2020-09-22 13:36:53 CEST"
 
 ``` r
 print(mcmc_nngp_list$seed) # the seed 
@@ -853,7 +853,7 @@ raw_chains_plots_covparms(records = mcmc_nngp_list$records, burn_in = 0.01, n_ch
 raw_chains_plots_beta(records = mcmc_nngp_list$records, burn_in = 0.01, n_chains = 1)
 ```
 
-![](Vignette_files/figure-markdown_github/unnamed-chunk-14-1.png)
+![](Vignette_files/figure-markdown_github/unnamed-chunk-14-1.png)![](Vignette_files/figure-markdown_github/unnamed-chunk-14-2.png)
 
 Parameters estimation
 =====================
@@ -1014,7 +1014,7 @@ mcmc_nngp_list = mcmc_nngp_initialize(observed_locs = locs, observed_field = obs
                                             seed = 1)
 ```
 
-    ## [1] "Setup done, 0.449408531188965 s elapsed"
+    ## [1] "Setup done, 0.448009490966797 s elapsed"
 
 ``` r
 mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
@@ -1062,4 +1062,4 @@ mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
 raw_chains_plots_beta(mcmc_nngp_list$records, burn_in = .01, n_chains = 1)
 ```
 
-![](Vignette_files/figure-markdown_github/unnamed-chunk-19-1.png)
+![](Vignette_files/figure-markdown_github/unnamed-chunk-19-1.png)![](Vignette_files/figure-markdown_github/unnamed-chunk-19-2.png)

@@ -83,7 +83,7 @@ raw_chains_plots_beta = function(records, burn_in = .5, n_chains = 4)
   # loop over regression coeffs
   if("beta" %in% names(records[[1]]$params))
   {
-    par(mfrow = c(min(ncol(records[[1]]$params$beta), 4), 1))
+    par(mfrow = c(n_chains, 1))
     for(i in seq(ncol(records[[1]]$params$beta)))
     {
       to_be_plotted = lapply(records, function(record)record$params$beta[seq(burn_in*(iter-1), iter-1), i])
