@@ -53,10 +53,10 @@ plot(locs[,1], observed_field, main = "observed field")
 ## How to initialize a model ? 
 
 Now, let's do the setup to work on the toy example. 
-We will use mcmc_Vecchia_initialize, a function that takes the observed data, Vecchia approximation, and the specified covariance model as arguments and outputs a big list with necessary information to run the model. The initial chain states are guessed using the size of the domain (covariance range), the variance of the signal (covariance scale and noise variance), a naive OLS of the observed signal on the  regressors (fix effects of the models), and a perturbation is added in order to overdisperse the starting points for Gelman-Rubin-Brooks diagnostics.
+We will use mcmc_nngp_initialize, a function that takes the observed data, Vecchia approximation, and the specified covariance model as arguments and outputs a big list with necessary information to run the model. The initial chain states are guessed using the size of the domain (covariance range), the variance of the signal (covariance scale and noise variance), a naive OLS of the observed signal on the  regressors (fix effects of the models), and a perturbation is added in order to overdisperse the starting points for Gelman-Rubin-Brooks diagnostics.
 The list is generated using various arguments : 
 
-- The covariance model of the latent field. The (stationary) covariance function is indicated with a string. The stationary functions of the GpGp package are used. The script uses PC hyperpriors for covariance parameters. If you don't precise them, the code does a not-too-informative guess using the domain size and the observed field variance
+- The covariance model of the latent field. The (stationary) covariance function is indicated with a string. The stationary functions of the GpGp package are used. 
 
 - The Vecchia approximation design. The maxmin order is always used for locations ordering. the number of neighbors m is set to 10 by default but can be changed. If needed, the reference set can be restricted to a certain number of obervations using n\_reference\_set. 
 
@@ -68,14 +68,13 @@ When it is possible, a regressor should be apssed as X\_locs, we will see why la
 - A seed, set to 1 if not precised
 
 ```{r setup}
-source("R_scripts/mcmc_Vecchia_initialize.R")
+source("Scripts/mcmc_nngp_initialize.R")
+source("Scripts/Coloring.R")
 # Now, let's initialize the list. This creates the chains, guesses the initial states, does the Nearest Neighbor search for NNGP, etc.... 
-mcmc_vecchia_list = mcmc_Vecchia_initialize(observed_locs = locs, observed_field = observed_field, 
+mcmc_nngp_list = mcmc_nngp_initialize(observed_locs = locs, observed_field = observed_field, 
                                             stationary_covfun = "exponential_isotropic", 
-                                            pc_prior_range = c(10, .5), 
-                                            pc_prior_sd = c(1, .5), 
                                             X_locs = as.data.frame(X), X_obs = NULL,
-                                            m = 5,  n_reference_set = NULL,
+                                            m = 5,  
                                             seed = 1)
 
 ```
@@ -85,11 +84,11 @@ This section explores the object mcmc\_vecchia\_list we just created in order to
 
 ### Some (reordered, without duplicate) spatial locations
 
-mcmc_vecchia_list\$observed_locs is the set of locations given as an input. It can have duplicates. 
-mcmc_vecchia_list\$locs is the set of spatial locations with no duplicates. It is reordered using the Maxmin order (see Guinness, *Permutation and grouping methods for sharpening Gaussian process approximations*) 
+mcmc_nngp_list\$observed_locs is the set of locations given as an input. It can have duplicates. 
+mcmc_nngp_list\$locs is the set of spatial locations with no duplicates. It is reordered using the Maxmin order (see Guinness, *Permutation and grouping methods for sharpening Gaussian process approximations*) 
 ```{r setup_locs}
-head(mcmc_vecchia_list$observed_locs)
-head(mcmc_vecchia_list$locs)
+head(mcmc_nngp_list$observed_locs)
+head(mcmc_nngp_list$locs)
 ```
 
 ### Regressors and various objects extracted from them
@@ -99,94 +98,94 @@ mcmc\_vecchia\_list\$X\$X  is the combination of X\_obs and X\_locs, but it is n
 
 mcmc\_vecchia\_list\$X\$X\_means indicates the means of the original regressors, in order to re-transform the regression coefficients samples once the model is fit. This allows to estimate the regression coefficients and the effect of the covariates on the signal. 
 
-mcmc_vecchia_list\$X$locs  indicates which columns of X come from X\_locs. In our case, since no X\_locs was given, it indicates all the columns of X. 
+mcmc_nngp_list\$X$locs  indicates which columns of X come from X\_locs. In our case, since no X\_locs was given, it indicates all the columns of X. 
 
 The rest of the elements are pre-computed cross-products that are used in the model fitting
 
 ```{r setup_X}
-head(mcmc_vecchia_list$X$X)
+head(mcmc_nngp_list$X$X)
 ```
 
 ### Information about the covariance model
-mcmc_vecchia_list\$space_time_model gives info about the covariance function, its parameters, their hyperpriors.
+mcmc_nngp_list\$space_time_model gives info about the covariance function, its parameters, their hyperpriors.
 ```{r setup_space_time_model}
-print(mcmc_vecchia_list$space_time_model)
+print(mcmc_nngp_list$space_time_model)
 ```
 
 ### The design of Vecchia approximation
-mcmc_vecchia_list\$vecchia_approx gives info about the Vecchia approximation design, the reordering of locations, and some miscellaneaous stuff such as the number of spatial locations and useful shorthands.
+mcmc_nngp_list\$vecchia_approx gives info about the Vecchia approximation design, the reordering of locations, and some miscellaneaous stuff such as the number of spatial locations and useful shorthands.
 
 #### The Nearest Neighbor Array (NNarray) that defines Vecchia approximation's Directed Acyclic Graph, and some shorthands directly derived from it.  
 ```{r}
 # Nearest Neighbor Array
-head(mcmc_vecchia_list$vecchia_approx$NNarray) 
+head(mcmc_nngp_list$vecchia_approx$NNarray) 
 # indicator of the non-NA coefficients in NNarray
-head(mcmc_vecchia_list$vecchia_approx$NNarray_non_NA) 
+head(mcmc_nngp_list$vecchia_approx$NNarray_non_NA) 
  # the column indices in the Vecchia factor = the non-NA entries of NNarray
-print(mcmc_vecchia_list$vecchia_approx$sparse_chol_column_idx[1:100])
+print(mcmc_nngp_list$vecchia_approx$sparse_chol_column_idx[1:100])
 # the row indices in the Vecchia factor = the row indices of the non-NA entries of NNarray
-print(mcmc_vecchia_list$vecchia_approx$sparse_chol_row_idx[1:100]) 
+print(mcmc_nngp_list$vecchia_approx$sparse_chol_row_idx[1:100]) 
 ```
 
 #### A sparseMatrix objects that stores the adjacency matrix of the Markov graph that is induced by Vecchia approximation. 
 Is tis obtained  by moralization of the Vecchia Directed Acyclic Graph. It will be used for chromatic sampling. 
 ```{r}
-print(mcmc_vecchia_list$vecchia_approx$MRF_adjacency_mat[1:30, 1:30]) 
+print(mcmc_nngp_list$vecchia_approx$MRF_adjacency_mat[1:30, 1:30]) 
 ```
 
 #### Vector/Lists of indices that put in relation the observed, possibly redundant observed_locs and the reordered, non-redundant locs. 
 
-The first one is a vector that matches the rows of observed\_locs with the rows of locs. It allows to use locs to recreate observed\_locs (see below). Its length is equal to the number of rows of mcmc_vecchia_list\$observed_locs and its values range from 1 to the number of rows of mcmc_vecchia_list\$locs. This means that there are potentially redundant indices in this vector (if and only if redundant spatial locations are observed). 
+The first one is a vector that matches the rows of observed\_locs with the rows of locs. It allows to use locs to recreate observed\_locs (see below). Its length is equal to the number of rows of mcmc_nngp_list\$observed_locs and its values range from 1 to the number of rows of mcmc_nngp_list\$locs. This means that there are potentially redundant indices in this vector (if and only if redundant spatial locations are observed). 
 ```{r}
-print(mcmc_vecchia_list$vecchia_approx$locs_match[1:100])
-head(mcmc_vecchia_list$observed_locs)
-head(mcmc_vecchia_list$locs[mcmc_vecchia_list$vecchia_approx$locs_match,])
+print(mcmc_nngp_list$vecchia_approx$locs_match[1:100])
+head(mcmc_nngp_list$observed_locs)
+head(mcmc_nngp_list$locs[mcmc_nngp_list$vecchia_approx$locs_match,])
 ```
 The second one is a list of vectors that matches the rows of locs to the rows of observed\_locs. It is a list and not a vector because there can be duplicates in observed\_locs, so various rows of observed\_locs can be matched to the same row of locs. 
 As a result, the list's length is the same as the number of rows of locs, but the sum of the lengths of the elements is equal to the number of rows of observed\_locs. 
 Its (difficult to pronounce) name is the reverse of the first index vector name : locs\_match || hctam\_scol
 ```{r}
 # It's a list
-print(mcmc_vecchia_list$vecchia_approx$hctam_scol[1:10])
+print(mcmc_nngp_list$vecchia_approx$hctam_scol[1:10])
 ```
 The third is a vector obtained by selecting only the first element of each vector of the previous list. It allows to recreate locs from observed\_locs. It has the same length as locs. 
 ```{r}
-print(mcmc_vecchia_list$vecchia_approx$hctam_scol_1[1:100])
-head(mcmc_vecchia_list$observed_locs[mcmc_vecchia_list$vecchia_approx$hctam_scol_1,]) 
-head(mcmc_vecchia_list$locs)
+print(mcmc_nngp_list$vecchia_approx$hctam_scol_1[1:100])
+head(mcmc_nngp_list$observed_locs[mcmc_nngp_list$vecchia_approx$hctam_scol_1,]) 
+head(mcmc_nngp_list$locs)
 ```
 
 
 ## The Markov Chain states
 
-mcmc_vecchia_list\$states is a list with 2 or more sublists, each corresponding to  one chain. 
+mcmc_nngp_list\$states is a list with 2 or more sublists, each corresponding to  one chain. 
 For each chain, the transition kernels are adapted in the first hundred iterations. They are stored in one sublist. 
 The other sublist contains the state of the model current parameters.
 ```{r}
-print(mcmc_vecchia_list$states$chain_1$transition_kernels) # the transition kernels
-print(mcmc_vecchia_list$states$chain_1$params$beta_0)# intercept
-print(mcmc_vecchia_list$states$chain_1$params$beta)# other regression coefficients
-print(mcmc_vecchia_list$states$chain_1$params$log_scale)# log of the scale parameter
-print(mcmc_vecchia_list$states$chain_1$params$shape) # other covariance parameters : log-range, smoothness
-print(mcmc_vecchia_list$states$chain_1$params$log_noise_variance) # log-variance of the Gaussian noise
-print(mcmc_vecchia_list$states$chain_1$params$field[seq(100)])# latent field
+print(mcmc_nngp_list$states$chain_1$transition_kernels) # the transition kernels
+print(mcmc_nngp_list$states$chain_1$params$beta_0)# intercept
+print(mcmc_nngp_list$states$chain_1$params$beta)# other regression coefficients
+print(mcmc_nngp_list$states$chain_1$params$log_scale)# log of the scale parameter
+print(mcmc_nngp_list$states$chain_1$params$shape) # other covariance parameters : log-range, smoothness
+print(mcmc_nngp_list$states$chain_1$params$log_noise_variance) # log-variance of the Gaussian noise
+print(mcmc_nngp_list$states$chain_1$params$field[seq(100)])# latent field
 ```
 ## Records of the chain states 
 There is one record per chain. For each chain, iterations is a two column matrix that gives info about the number of iterations done and the time from setup. params is a list that keeps the chain states. For now, they are empty since the chains were not run.
 When the chains start running, the records start filling. 
 
 ```{r}
-print(mcmc_vecchia_list$records) 
+print(mcmc_nngp_list$records) 
 ```
 ## Diagnostics
 Gelman-Rubin-Brooks diagnostics are computed while the chain runs. They are stocked here. For now, there is nothing.
 ```{r}
-print(mcmc_vecchia_list$diagnostics) 
+print(mcmc_nngp_list$diagnostics) 
 ```
 ## Miscellaneous
 ```{r}
-print(mcmc_vecchia_list$t_begin) # the time setup was done 
-print(mcmc_vecchia_list$seed) # the seed 
+print(mcmc_nngp_list$t_begin) # the time setup was done 
+print(mcmc_nngp_list$seed) # the seed 
 ```
 
 # Let's fit the model
@@ -196,9 +195,6 @@ We use the function mcmc\_vecchia\_run with arguments :
 - mcmc\_vecchia\_list, the object we just created and examined
 
 - n\_cores : the number of cores used 
-
-- n\_blocks : the number of blocks for field updating. The fewer blocks, the bigger they are. The number of 
-blocks should be such that no block is bigger than 1000, equivalently it should be under the number of spatial locations divided by 1000.
 
 - n\_iterations\_update : the number of iterations between each  join of the chains. 
 
@@ -211,43 +207,44 @@ blocks should be such that no block is bigger than 1000, equivalently it should 
 - Gelman\_Rubin\_Brooks\_stop : a vector of two numbers bigger than 1, an automatic stop using Gelman-Rubin-Brooks diagnostics.
 Univariate and multivariate  Gelman-Rubin-Brooks diagnostics are computed on the hugh-level parameters (covariance, noise variance, fix effects). If either the multivariate or all univariate diagnostics fall below thir respective thresold, the function stops and the rest of the scheduled iterations is not done. If it is set to c(1, 1), all the epochs are done. 
 
-- plots : number of plots per window, if 0 no plots are done. Here we hide the plots. 
+- ancillary : whether ancillary covariance parameters updates are done. True by default and better left True all the time. 
+
+- n_chromatic : number of chromatic update per iterations, better to do a couple from our experience
 
 ## burn-in : run the chains (almost) wihout saving the field (field_thinning = 0.01)
 ```{r, fig.show='hide'}
-source("R_scripts/mcmc_Vecchia_diagnose.R")
-source("R_scripts/mcmc_Vecchia_run.R")
-source("R_scripts/DSATUR.R")
-source("R_scripts/mcmc_vecchia_update_Gaussian.R")
-mcmc_vecchia_list =  mcmc_Vecchia_run(mcmc_vecchia_list, n_cores = 3, n_blocks = 5,  
-                                      n_cycles = 2, n_iterations_update = 200,  
-                                      burn_in = .5, field_thinning = 0.01, Gelman_Rubin_Brooks_stop = c(1.00, 1.00),
-                                      plots = 1)
+source("Scripts/mcmc_nngp_diagnose.R")
+source("Scripts/mcmc_nngp_run.R")
+source("Scripts/mcmc_nngp_update_Gaussian.R")
+mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3, 
+                                      n_cycles = 5, n_iterations_update = 200,  ancillary = T, n_chromatic = 5, 
+                                      burn_in = .5, field_thinning = 0.01, Gelman_Rubin_Brooks_stop = c(1.00, 1.00))
 ```
 ## Run the chains until all individual Gelman-Rubin-Brooks diagnostics drop below 1.05
 ```{r, fig.show='hide'}
-mcmc_vecchia_list =  mcmc_Vecchia_run(mcmc_vecchia_list, n_cores = 3, n_blocks = 5,  
+mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
                                       n_cycles = 1000, n_iterations_update = 100,  
-                                      burn_in = .5, field_thinning = .2, Gelman_Rubin_Brooks_stop = c(1.00, 1.05),
-                                      plots = 1)
+                                      burn_in = .5, field_thinning = .2, Gelman_Rubin_Brooks_stop = c(1.00, 1.05))
                                       
                                       
 ```
-## Run the chains 400 more iterations just to be sure
+## Run the chains 1000 more iterations just to be sure
 ```{r, fig.show='hide'}
-mcmc_vecchia_list =  mcmc_Vecchia_run(mcmc_vecchia_list, n_cores = 3, n_blocks = 5,  
-                                      n_cycles = 4, n_iterations_update = 100,  
-                                      burn_in = .5, field_thinning = .2, Gelman_Rubin_Brooks_stop = c(1.00, 1.00),
-                                      plots = 1)
+mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
+                                      n_cycles = 10, n_iterations_update = 100,  
+                                      burn_in = .5, field_thinning = .2, Gelman_Rubin_Brooks_stop = c(1.00, 1.00))
 ```
 
 
 # Chains plotting
 
 Normally, plotting is done each time the chains join. This allows to monitor the progress of the fitting along with Gelman-Rubin-Brooks diagnostics. Here, we de-activated it in the Rmarkdown options in order to keep the document readable. 
-Let's plot the chains. We must input the records of the chains, the burn in (the proportion of observations that are discarded), and the number of plots by window.
+Let's plot the chains. We must input the records of the chains, and the burn in (the proportion of observations that are discarded). 
 ```{r}
-raw_chains_plots(records = mcmc_vecchia_list$records, burn_in = 0.01, nplots = 1)
+raw_chains_plots_covparms(records = mcmc_nngp_list$records, burn_in = 0.01)
+```
+```{r}
+raw_chains_plots_beta(records = mcmc_nngp_list$records, burn_in = 0.01)
 ```
 
 # Parameters estimation
@@ -262,10 +259,10 @@ There are estimations of :
 
 - The latent field
 
-You will note that the covariance parameters estimations are quite off the mark. This happens with 1-dimension examples but not whith 2 or 3 -dimensions spatial designs, which are the cases that interest us anyway...
+
 ```{r}
-source("R_scripts/mcmc_Vecchia_estimate.R")
-estimations  = mcmc_vecchia_estimate(mcmc_vecchia_list, burn_in = .5)
+source("Scripts/mcmc_nngp_estimate.R")
+estimations  = mcmc_nngp_estimate(mcmc_nngp_list, burn_in = .5)
 print(estimations$covariance_params$GpGp_covparams)
 print(estimations$fixed_effects)
 head(estimations$field)
@@ -286,10 +283,10 @@ The outputs are :
 
 - Prediction summaries (mean, quantiles 0.025, 0.5, 0.975, and standard deviation)
 ```{r}
-source("R_scripts/mcmc_Vecchia_predict.R")
+source("Scripts/mcmc_nngp_predict.R")
 predicted_locs = cbind(seq(0, 500, .01), 1)
 predicted_locs[1, 2] = 1.01
-predictions = mcmc_Vecchia_predict_field(mcmc_vecchia_list, predicted_locs = predicted_locs, n_cores = 3, m = 5)
+predictions = mcmc_nngp_predict_field(mcmc_nngp_list, predicted_locs = predicted_locs, n_cores = 3, m = 5)
 plot(locs[,1], field)
 lines( predicted_locs[,1], predictions$predicted_field_summary[,"mean"], col  = 2)
 legend("topright", legend = c("true latent field", "prediction"), fill = c(1, 2))
@@ -309,7 +306,7 @@ The outputs are :
 ```{r}
 X_pred = as.data.frame(predicted_locs[,1])
 names(X_pred) = "slope"
-predictions = mcmc_Vecchia_predict_fixed_effects(mcmc_vecchia_list = mcmc_vecchia_list, X_predicted =  X_pred, burn_in = .5, n_cores = 3, match_field_thinning = F, add_intercept = T)
+predictions = mcmc_nngp_predict_fixed_effects(mcmc_nngp_list = mcmc_nngp_list, X_predicted =  X_pred, burn_in = .5, n_cores = 3, match_field_thinning = F, add_intercept = T)
 plot(locs[,1], observed_field)
 lines( predicted_locs[,1], predictions$predicted_fixed_effects_summary[,"mean"], col  = 2)
 legend("topright", legend = c("observed field", "predicted slope effect"), fill = c(1, 2))
@@ -326,23 +323,20 @@ We can see that the Gelman-Rubin-Brooks diagnostics of Xslope are terrible. The 
 
 
 ```{r, fig.show = "hide"}
-source("R_scripts/mcmc_Vecchia_initialize.R")
+source("Scripts/mcmc_nngp_initialize.R")
 
 
 # Now, let's initialize the list. This creates the chains, guesses the initial states, does the Nearest Neighbor search for NNGP, etc.... 
-mcmc_vecchia_list = mcmc_Vecchia_initialize(observed_locs = locs, observed_field = observed_field, 
+mcmc_nngp_list = mcmc_nngp_initialize(observed_locs = locs, observed_field = observed_field, 
                                             stationary_covfun = "exponential_isotropic", 
-                                            pc_prior_range = c(10, .5), 
-                                            pc_prior_sd = c(1, .5), 
                                             X_obs = as.data.frame(X),
-                                            m = 5,  n_reference_set = NULL,
+                                            m = 5, 
                                             seed = 1)
-mcmc_vecchia_list =  mcmc_Vecchia_run(mcmc_vecchia_list, n_cores = 3, n_blocks = 5,  
+mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
                                       n_cycles = 5, n_iterations_update = 200,  
-                                      burn_in = .5, field_thinning = 0.01, Gelman_Rubin_Brooks_stop = c(1.00, 1.00),
-                                      plots = 1)
+                                      burn_in = .5, field_thinning = 0.01, Gelman_Rubin_Brooks_stop = c(1.00, 1.00))
 ```
 ```{r}
-raw_chains_plots(mcmc_vecchia_list$records, burn_in = .01,  nplots = 1)
+raw_chains_plots_beta(mcmc_nngp_list$records, burn_in = .01,  nplots = 1)
 ```
 

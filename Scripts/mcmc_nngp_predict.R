@@ -68,7 +68,7 @@ mcmc_nngp_predict_fixed_effects = function(mcmc_nngp_list, X_predicted, burn_in 
 {
   # should the fixed effects be matched with field thinning ? 
   if(match_field_thinning)  stored_idx = mcmc_nngp_list$records$chain_1$saved_field
-  if(!match_field_thinning)  stored_idx = mcmc_nngp_list$records$chain_1$iterations[nrow(mcmc_nngp_list$records$chain_1$iterations), 1]
+  if(!match_field_thinning)  stored_idx = seq(mcmc_nngp_list$records$chain_1$iterations[nrow(mcmc_nngp_list$records$chain_1$iterations), 1])
   # get stored idx
   stored_idx = stored_idx[stored_idx>(burn_in*max(stored_idx))]
   n_samples = length(stored_idx)
