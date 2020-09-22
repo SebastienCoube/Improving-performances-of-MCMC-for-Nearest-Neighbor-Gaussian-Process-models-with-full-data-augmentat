@@ -241,10 +241,10 @@ mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
 Normally, plotting is done each time the chains join. This allows to monitor the progress of the fitting along with Gelman-Rubin-Brooks diagnostics. Here, we de-activated it in the Rmarkdown options in order to keep the document readable. 
 Let's plot the chains. We must input the records of the chains, and the burn in (the proportion of observations that are discarded). 
 ```{r}
-raw_chains_plots_covparms(records = mcmc_nngp_list$records, burn_in = 0.01)
+raw_chains_plots_covparms(records = mcmc_nngp_list$records, burn_in = 0.01, n_chains = 1)
 ```
 ```{r}
-raw_chains_plots_beta(records = mcmc_nngp_list$records, burn_in = 0.01)
+raw_chains_plots_beta(records = mcmc_nngp_list$records, burn_in = 0.01, n_chains = 1)
 ```
 
 # Parameters estimation
@@ -337,6 +337,6 @@ mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
                                       burn_in = .5, field_thinning = 0.01, Gelman_Rubin_Brooks_stop = c(1.00, 1.00))
 ```
 ```{r}
-raw_chains_plots_beta(mcmc_nngp_list$records, burn_in = .01)
+raw_chains_plots_beta(mcmc_nngp_list$records, burn_in = .01, n_chains = 1)
 ```
 

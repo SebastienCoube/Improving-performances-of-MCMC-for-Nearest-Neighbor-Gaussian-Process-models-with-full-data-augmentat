@@ -40,10 +40,11 @@ raw_chains_plots_one_param = function(records, name = "beta_0", begin = 1, end =
   }
 }
 
-raw_chains_plots_covparms = function(records, burn_in = .5)
+raw_chains_plots_covparms = function(records, burn_in = .5, n_chains = NULL)
 {
+  if(is.null(n_chains))n_chains = length(colnames(records[[1]]$params$shape))+3
   iter = nrow(records[[1]]$params$beta_0)
-  par(mfrow = c(length(colnames(records[[1]]$params$shape))+3, 1))
+  par(mfrow = c(n_chains, 1))
   for(name in c(setdiff(names(records[[1]]$params), c("shape", "beta", "field"))))
   {
     to_be_plotted = lapply(records, function(record)record$params[[name]][seq(burn_in*(iter-1), iter-1)])
@@ -75,10 +76,10 @@ raw_chains_plots_covparms = function(records, burn_in = .5)
 }
 
 
-raw_chains_plots_beta = function(records, burn_in = .5)
+raw_chains_plots_beta = function(records, burn_in = .5, n_chains = 4)
 {
   iter = nrow(records[[1]]$params$beta_0)
-  par(mfrow = c(length(colnames(records[[1]]$params$shape))+3, 1))
+  par(mfrow = c(n_chains, 1))
   # loop over regression coeffs
   if("beta" %in% names(records[[1]]$params))
   {
