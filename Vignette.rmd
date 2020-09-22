@@ -337,6 +337,6 @@ mcmc_nngp_list =  mcmc_nngp_run(mcmc_nngp_list, n_cores = 3,
                                       burn_in = .5, field_thinning = 0.01, Gelman_Rubin_Brooks_stop = c(1.00, 1.00))
 ```
 ```{r}
-raw_chains_plots_beta(mcmc_nngp_list$records, burn_in = .01,  nplots = 1)
+raw_chains_plots_beta(mcmc_nngp_list$records, burn_in = .01)
 ```
 
