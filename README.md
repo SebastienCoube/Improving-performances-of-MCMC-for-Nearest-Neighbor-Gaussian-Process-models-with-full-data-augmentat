@@ -1,6 +1,6 @@
 # Supplementary material
 
-This repository is the supplementary material for *Two MCMC strategies for Nearest Neighbor Gaussian Process*. 
+This repository is the supplementary material for *Improving performances of MCMC for Nearest Neighbor Gaussian Process models with full data augmentation*. 
 
  - The folder R_scripts gathers the immplementation of the methods that are presented in the article. 
  
