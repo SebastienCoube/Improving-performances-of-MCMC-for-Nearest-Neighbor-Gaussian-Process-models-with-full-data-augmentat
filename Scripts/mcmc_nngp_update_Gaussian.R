@@ -157,20 +157,82 @@ mcmc_nngp_update_Gaussian = function(locs, X, observed_field, space_time_model,
                                 }
                                 
                                 
+                                ########################################################################
+                                # covariance parameters : scale and range with sufficient augmentation #
+                                ########################################################################
+                                #scale and range are block updated
+                                # proposing new values
+                                innovation =  rnorm(length(state$params$shape)+1, 0, exp(.5*state$transition_kernels$covariance_params_sufficient$logvar))
+                                new_log_scale = state$params$log_scale+innovation[1]
+                                if(exp(new_log_scale)<var(observed_field))
+                                {
+                                  new_shape = state$params$shape+innovation[seq(2, length(innovation))]
+                                  if(length(innovation) == 2)new_shape = state$params$shape+innovation[seq(2, length(innovation))]
+                                  
+                                  # computing new Vecchia spare Cholesky factor, new conditional mean, new precision
+                                  # Vecchia factor
+                                  shape = sapply(seq(length(new_shape)), function(j)
+                                  {
+                                    if(substr(space_time_model$covfun$shape_params[j], 1, 3)=="log")return(exp(new_shape[j]))
+                                    else if(substr(space_time_model$covfun$shape_params[j], 1, 6)=="qlogis")return(.5+.5*plogis(new_shape[j]))
+                                  })
+                                  new_compressed_sparse_chol = GpGp::vecchia_Linv(covparms = c(1, shape, 0), covfun_name = space_time_model$covfun$stationary_covfun, locs, vecchia_approx$NNarray)
+                                  new_sparse_chol = Matrix::sparseMatrix(i = vecchia_approx$sparse_chol_row_idx, j = vecchia_approx$sparse_chol_column_idx, x = new_compressed_sparse_chol[vecchia_approx$NNarray_non_NA], triangular = T)
+                                  #print(as.matrix(Matrix::solve(sparse_chol)))
+                                  # GP prior simulated field -- covariance parameters
+                                  GP_ratio =  0
+                                  GP_ratio = 
+                                    ll_compressed_sparse_chol(Linv= new_compressed_sparse_chol, log_scale = new_log_scale,          field = state$params$field- state$params$beta_0, NNarray =  vecchia_approx$NNarray) - 
+                                    ll_compressed_sparse_chol(Linv= compressed_sparse_chol,     log_scale = state$params$log_scale, field = state$params$field- state$params$beta_0, NNarray =  vecchia_approx$NNarray)
+                                  
+                                  #print(field_response_ratio+GP_ratio+pc_prior_ratio+transition_ratio)
+                                  if(GP_ratio > log(runif(1)))        
+                                  {
+                                    #parameter updating
+                                    state$params$shape = new_shape
+                                    state$params$log_scale = new_log_scale
+                                    #updating Vecchia cholesky
+                                    compressed_sparse_chol = new_compressed_sparse_chol
+                                    sparse_chol = new_sparse_chol
+                                    precision_diag = as.vector((compressed_sparse_chol[vecchia_approx$NNarray_non_NA]^2)%*%Matrix::sparseMatrix(i = seq(length(vecchia_approx$sparse_chol_column_idx)), j = vecchia_approx$sparse_chol_column_idx, x = rep(1, length(vecchia_approx$sparse_chol_row_idx))))
+                                    # updating ecceptance records
+                                    acceptance_records$covariance_acceptance_sufficient[iter] = 1
+                                    if(length(X$locs)>0)
+                                    {
+                                      beta_interweaved_precision = as.matrix(Matrix::crossprod(sparse_chol%*%cbind(1, X$X[vecchia_approx$hctam_scol_1,X$locs])))
+                                      beta_interweaved_covmat = solve(beta_interweaved_precision, tol = min(rcond(beta_interweaved_precision),.Machine$double.eps))
+                                      beta_interweaved_covmat_chol = chol(beta_interweaved_covmat)
+                                      sparse_chol_X_locs = as.matrix(sparse_chol%*%cbind(1, X$X[vecchia_approx$hctam_scol_1,X$locs]))
+                                    }
+                                  }
+                                }
+                                if(iter_start %in% seq(0, 2000) & iter/25 == iter %/% 25)
+                                {
+                                  if(mean(acceptance_records$covariance_acceptance_sufficient[seq(iter-24, iter)])<.05) state$transition_kernels$covariance_params_sufficient$logvar = state$transition_kernels$covariance_params_sufficient$logvar - rnorm(1, .2, .05)
+                                  if(mean(acceptance_records$covariance_acceptance_sufficient[seq(iter-24, iter)])>.15)  state$transition_kernels$covariance_params_sufficient$logvar = state$transition_kernels$covariance_params_sufficient$logvar + rnorm(1, .2, .05)
+                                }
                                 ##############
                                 # Field mean #
                                 ##############
                                 
                                 # updating just beta_0
-                                beta_covmat = c(solve(as.vector(Matrix::crossprod(sparse_chol%*%rep(1, vecchia_approx$n_locs))))*exp(state$params$log_scale))
-                                beta_mean = exp(-state$params$log_scale)*as.vector(Matrix::crossprod(sparse_chol%*%state$params$field, sparse_chol%*%rep(1, vecchia_approx$n_locs)))*beta_covmat
-                                state$params$beta_0 = beta_mean + sqrt(as.vector(beta_covmat))*rnorm(1)
-                                
+                                if(length(X$locs) == 0 | is.null(X$X))
+                                {
+                                  beta_covmat = c(solve(as.vector(Matrix::crossprod(sparse_chol%*%rep(1, vecchia_approx$n_locs))))*exp(state$params$log_scale))
+                                  beta_mean = exp(-state$params$log_scale)*as.vector(Matrix::crossprod(sparse_chol%*%state$params$field, sparse_chol%*%rep(1, vecchia_approx$n_locs)))*beta_covmat
+                                  state$params$beta_0 = beta_mean + sqrt(as.vector(beta_covmat))*rnorm(1)
+                                }
+                                # if other regression coefficients
                                 if(!is.null(X$X))
                                 {
                                   # sampling beta
-                                  beta_mean =  crossprod(observed_field-state$params$field[vecchia_approx$locs_match], X$X) %*%X$solve_XTX
-                                  state$params$beta   = c(beta_mean + exp(.5*state$params$log_noise_variance) * as.vector(t(X$chol_solve_XTX)%*%rnorm(ncol(X$X))))
+                                  #beta_mean =  crossprod(observed_field-state$params$field[vecchia_approx$locs_match], X$X) %*%X$solve_XTX
+                                  beta_mean =  crossprod(observed_field-state$params$field[vecchia_approx$locs_match] + state$params$beta_0, cbind(1, X$X)) %*%X$solve_1XT1X
+                                  #state$params$beta   = c(beta_mean + exp(.5*state$params$log_noise_variance) * as.vector(t(X$chol_solve_XTX)%*%rnorm(ncol(X$X))))
+                                  innovation   = c(beta_mean + exp(.5*state$params$log_noise_variance) * as.vector(t(X$chol_solve_1XT1X)%*%rnorm(ncol(X$X)+1)))
+                                  state$params$field = state$params$field - state$params$beta_0 + innovation[1]
+                                  state$params$beta_0 = innovation[1]
+                                  state$params$beta = innovation[-1]
                                   # interweaving centered sampling in case of location data to improve beta sampling
                                   if(length(X$locs)>0)
                                   {
@@ -180,6 +242,7 @@ mcmc_nngp_update_Gaussian = function(locs, X, observed_field, space_time_model,
                                     innovation = as.vector(beta_mean) +exp(.5*state$params$log_scale)*t(beta_interweaved_covmat_chol)%*%rnorm(length(X$locs)+1)
                                     state$params$beta_0 = innovation[1]
                                     state$params$beta[X$locs] = innovation[-1]
+                                    state$params$field  = other_field - X$X[vecchia_approx$hctam_scol_1,X$locs]%*%matrix(state$params$beta[X$locs], ncol = 1)
                                   }
                                 }
                                 
@@ -187,110 +250,38 @@ mcmc_nngp_update_Gaussian = function(locs, X, observed_field, space_time_model,
                                 else mu = rep(state$params$beta_0, vecchia_approx$n_obs)
                                 
                                 
-                              ########################################################################
-                              # covariance parameters : scale and range with sufficient augmentation #
-                              ########################################################################
-                              #scale and range are block updated
-                              # proposing new values
-                              innovation =  rnorm(length(state$params$shape)+1, 0, exp(.5*state$transition_kernels$covariance_params_sufficient$logvar))
-                              new_log_scale = state$params$log_scale+innovation[1]
-                              if(exp(new_log_scale)<var(observed_field))
-                              {
-                                new_shape = state$params$shape+innovation[seq(2, length(innovation))]
-                                if(length(innovation) == 2)new_shape = state$params$shape+innovation[seq(2, length(innovation))]
                                 
-                                # computing new Vecchia spare Cholesky factor, new conditional mean, new precision
-                                # Vecchia factor
-                                shape = sapply(seq(length(new_shape)), function(j)
-                                {
-                                  if(substr(space_time_model$covfun$shape_params[j], 1, 3)=="log")return(exp(new_shape[j]))
-                                  else if(substr(space_time_model$covfun$shape_params[j], 1, 6)=="qlogis")return(.5+.5*plogis(new_shape[j]))
-                                })
-                                new_compressed_sparse_chol = GpGp::vecchia_Linv(covparms = c(1, shape, 0), covfun_name = space_time_model$covfun$stationary_covfun, locs, vecchia_approx$NNarray)
-                                new_sparse_chol = Matrix::sparseMatrix(i = vecchia_approx$sparse_chol_row_idx, j = vecchia_approx$sparse_chol_column_idx, x = new_compressed_sparse_chol[vecchia_approx$NNarray_non_NA], triangular = T)
-                                #print(as.matrix(Matrix::solve(sparse_chol)))
-                                # GP prior simulated field -- covariance parameters
-                                GP_ratio =  0
-                                GP_ratio = 
-                                  ll_compressed_sparse_chol(Linv= new_compressed_sparse_chol, log_scale = new_log_scale,          field = state$params$field- state$params$beta_0, NNarray =  vecchia_approx$NNarray) - 
-                                  ll_compressed_sparse_chol(Linv= compressed_sparse_chol,     log_scale = state$params$log_scale, field = state$params$field- state$params$beta_0, NNarray =  vecchia_approx$NNarray)
-                                
-                                #print(field_response_ratio+GP_ratio+pc_prior_ratio+transition_ratio)
-                                if(GP_ratio > log(runif(1)))        
-                                {
-                                  #parameter updating
-                                  state$params$shape = new_shape
-                                  state$params$log_scale = new_log_scale
-                                  #updating Vecchia cholesky
-                                  compressed_sparse_chol = new_compressed_sparse_chol
-                                  sparse_chol = new_sparse_chol
-                                  precision_diag = as.vector((compressed_sparse_chol[vecchia_approx$NNarray_non_NA]^2)%*%Matrix::sparseMatrix(i = seq(length(vecchia_approx$sparse_chol_column_idx)), j = vecchia_approx$sparse_chol_column_idx, x = rep(1, length(vecchia_approx$sparse_chol_row_idx))))
-                                  # updating ecceptance records
-                                  acceptance_records$covariance_acceptance_sufficient[iter] = 1
-                                  if(length(X$locs)>0)
-                                  {
-                                    beta_interweaved_precision = as.matrix(Matrix::crossprod(sparse_chol%*%cbind(1, X$X[vecchia_approx$hctam_scol_1,X$locs])))
-                                    beta_interweaved_covmat = solve(beta_interweaved_precision, tol = min(rcond(beta_interweaved_precision),.Machine$double.eps))
-                                    beta_interweaved_covmat_chol = chol(beta_interweaved_covmat)
-                                    sparse_chol_X_locs = as.matrix(sparse_chol%*%cbind(1, X$X[vecchia_approx$hctam_scol_1,X$locs]))
-                                  }
-                                }
-                              }
-                              if(iter_start %in% seq(0, 2000) & iter/25 == iter %/% 25)
-                              {
-                                if(mean(acceptance_records$covariance_acceptance_sufficient[seq(iter-24, iter)])<.05) state$transition_kernels$covariance_params_sufficient$logvar = state$transition_kernels$covariance_params_sufficient$logvar - rnorm(1, .2, .05)
-                                if(mean(acceptance_records$covariance_acceptance_sufficient[seq(iter-24, iter)])>.15)  state$transition_kernels$covariance_params_sufficient$logvar = state$transition_kernels$covariance_params_sufficient$logvar + rnorm(1, .2, .05)
-                              }
-                              
                                 ############################
                                 # Field : chromatic sampling #
                                 #############################
-                              for(i in seq(n_chromatic))
-                              {
-                                
-                                residuals_sum = residuals_sum_matrix%*%(observed_field - mu)
-                                for(color_idx in unique(vecchia_approx$coloring))
+                                for(i in seq(n_chromatic))
                                 {
-                                  selected_locs = which(vecchia_approx$coloring==color_idx)
-                                  posterior_precision = exp(-state$params$log_scale) * precision_diag[selected_locs] + exp(-state$params$log_noise_variance)*vecchia_approx$obs_per_loc[selected_locs]
-                                  #conditional mean
-                                  cond_mean = state$params$beta_0 - # un conditional mean
-                                    (1/posterior_precision) *
-                                    ( 
-                                      as.vector(Matrix::crossprod(sparse_chol[,selected_locs], sparse_chol%*%((state$params$field - state$params$beta_0)*(vecchia_approx$coloring!=color_idx))))*exp(-state$params$log_scale) # rest of the simulated Gaussian variables
-                                      - exp(-state$params$log_noise_variance)*residuals_sum[selected_locs]# Gaussian observations 
-                                    )
-                                  # field sampling
-                                  state$params$field [selected_locs] = as.vector(cond_mean +rnorm(length(selected_locs))/sqrt(posterior_precision))
-                                }
-                              }
-                                
-                                
-                                
                                   
-                              ##########################################################
-                              # Scale and noise variance with sufficient  augmentation #
-                              ##########################################################
+                                  residuals_sum = residuals_sum_matrix%*%(observed_field - mu)
+                                  for(color_idx in unique(vecchia_approx$coloring))
+                                  {
+                                    selected_locs = which(vecchia_approx$coloring==color_idx)
+                                    posterior_precision = exp(-state$params$log_scale) * precision_diag[selected_locs] + exp(-state$params$log_noise_variance)*vecchia_approx$obs_per_loc[selected_locs]
+                                    #conditional mean
+                                    cond_mean = state$params$beta_0 - # un conditional mean
+                                      (1/posterior_precision) *
+                                      ( 
+                                        as.vector(Matrix::crossprod(sparse_chol[,selected_locs], sparse_chol%*%((state$params$field - state$params$beta_0)*(vecchia_approx$coloring!=color_idx))))*exp(-state$params$log_scale) # rest of the simulated Gaussian variables
+                                        - exp(-state$params$log_noise_variance)*residuals_sum[selected_locs]# Gaussian observations 
+                                      )
+                                    # field sampling
+                                    state$params$field [selected_locs] = as.vector(cond_mean +rnorm(length(selected_locs))/sqrt(posterior_precision))
+                                  }
+                                }
+                                
+                              ##################
+                              # Noise variance #
+                              ##################
                               
                               sum_squared_residuals = sum((observed_field - state$params$field[vecchia_approx$locs_match] - mu + state$params$beta_0)^2)
                               field_precision_field = sum((sparse_chol %*% (state$params$field -state$params$beta_0))^2)
                               for(i in seq(10))
                               {
-                                #########################################
-                                # Scale with sufficient parametrization #
-                                #########################################
-                                innovation = rnorm(1, 0, .01)
-                                if(exp(state$params$log_scale + innovation)<var(observed_field))
-                                {
-                                  if(-.5 * vecchia_approx$n_locs*innovation - .5 * field_precision_field * (exp(-state$params$log_scale - innovation) - exp(-state$params$log_scale)) > log(runif(1)))
-                                  {
-                                    state$params$log_scale = state$params$log_scale + innovation
-                                  }
-                                }
-                                
-                                ##################################################
-                                # noise variance with sufficient parametrization #
-                                ##################################################
                                 innovation = rnorm(1, 0, .01)
                                 if(exp(state$params$log_noise_variance + innovation)<var(observed_field))
                                 {

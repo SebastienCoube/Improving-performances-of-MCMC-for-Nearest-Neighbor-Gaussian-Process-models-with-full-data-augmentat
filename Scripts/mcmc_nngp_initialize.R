@@ -26,11 +26,11 @@ mcmc_nngp_initialize =
     locs = rbind(observed_locs)
     # remove duplicated locations
     locs = locs[duplicated(locs)==F,]
-    if(reordering[1] == "maxmin")locs_reordering = GpGp::order_maxmin(locs, lonlat = !identical((grep("sphere", "sphere")) , integer(0)))
+    if(reordering[1] == "maxmin")locs_reordering = GpGp::order_maxmin(locs, lonlat = !identical((grep("sphere", stationary_covfun)) , integer(0)))
     if(reordering[1] == "random")locs_reordering = sample(seq(nrow(locs)))
-    if(reordering[1] == "coord")locs_reordering = GpGp::order_coordinate(locs = locs, coordinate = reordering[,2])
-    if(reordering[1] == "dist_to_point")locs_reordering = GpGp::order_dist_to_point(locs, loc0 = reordering[,2], lonlat = !identical((grep("sphere", "sphere")) , integer(0)))
-    if(reordering[1] == "middleout")locs_reordering = GpGp::order_middleout(locs, lonlat = !identical((grep("sphere", "sphere")) , integer(0)))
+    if(reordering[1] == "coord")locs_reordering = GpGp::order_coordinate(locs = locs, coordinate = as.numeric(reordering[2]))
+    if(reordering[1] == "dist_to_point")locs_reordering = GpGp::order_dist_to_point(locs, loc0 = as.numeric(reordering[2]), lonlat = !identical((grep("sphere", stationary_covfun)) , integer(0)))
+    if(reordering[1] == "middleout")locs_reordering = GpGp::order_middleout(locs, lonlat = !identical((grep("sphere", stationary_covfun)) , integer(0)))
     locs = locs[locs_reordering,]
     # extracting number of locations as shortcut
     n = nrow(locs)
@@ -132,6 +132,8 @@ mcmc_nngp_initialize =
       for(i in seq(ncol(X$X)))X$X[,i] = X$X[,i] - mean(X$X[,i])
       X$solve_XTX = solve(crossprod(X$X))
       X$chol_solve_XTX = chol(X$solve_XTX)
+      X$solve_1XT1X = solve(crossprod(cbind(1, X$X)))
+      X$chol_solve_1XT1X = chol(X$solve_1XT1X)
     }
     
     ################
@@ -149,14 +151,14 @@ mcmc_nngp_initialize =
       #########################
     for(i in seq(n_chains))
     {
-    if(stationary_covfun == "exponential_isotropic") states[[i]]$params$shape = c(sample(log(max(dist(locs[1:100,])))-log(seq(2000, 20000, 1)), 1))
-    if(stationary_covfun == "exponential_sphere") states[[i]]$params$shape = c(sample(log(max(dist(locs[1:100,])))-log(seq(2000, 20000, 1)), 1))
-    if(stationary_covfun == "exponential_scaledim") states[[i]]$params$shape = sapply(seq(ncol(locs)), function(j)return(sample(log(max(dist(locs[1:100,j])))-log(seq(2000, 20000, 1)), 1)))
-    if(stationary_covfun == "exponential_spacetime") states[[i]]$params$shape = c(sample(log(max(dist(locs[1:100,-ncol(locs)])))-log(seq(2000, 20000, 1)), 1), sample(log(max(dist(locs[1:100,ncol(locs)])))-log(seq(2000, 20000, 1)), 1))
-    if(stationary_covfun == "matern_isotropic") states[[i]]$params$shape = c(sample(log(max(dist(locs[1:100,])))-log(seq(2000, 20000, 1)), 1), rnorm(1))
-    if(stationary_covfun == "matern_sphere") states[[i]]$params$shape = c(sample(log(max(dist(locs[1:100,])))-log(seq(2000, 20000, 1)), 1), rnorm(1))
-    if(stationary_covfun == "matern_scaledim") states[[i]]$params$shape = c(sapply(seq(ncol(locs)), function(j)sample(log(max(dist(locs[1:100,j])))-log(seq(2000, 20000, 1)), 1)), rnorm(1))
-    if(stationary_covfun == "matern_spacetime") states[[i]]$params$shape =  c(sample(log(max(dist(locs[1:100,-ncol(locs)])))-log(seq(2000, 20000, 1)), 1), sample(log(max(dist(locs[1:100,ncol(locs)])))-log(seq(2000, 20000, 1)), 1), rnorm(1))
+    if(stationary_covfun == "exponential_isotropic") states[[i]]$params$shape = c(sample(log(max(dist(locs[1:100,])))-log(seq(20, 200, 1)), 1))
+    if(stationary_covfun == "exponential_sphere") states[[i]]$params$shape =    c(sample(log(max(dist(locs[1:100,])))-log(seq(20, 200, 1)), 1))
+    if(stationary_covfun == "exponential_scaledim") states[[i]]$params$shape = sapply(seq(ncol(locs)), function(j)return(sample(log(max(dist(locs[1:100,j])))-log(seq(20, 200, 1)), 1)))
+    if(stationary_covfun == "exponential_spacetime") states[[i]]$params$shape = c(sample(log(max(dist(locs[1:100,-ncol(locs)])))-log(seq(20, 200, 1)), 1), sample(log(max(dist(locs[1:100,ncol(locs)])))-log(seq(20, 200, 1)), 1))
+    if(stationary_covfun == "matern_isotropic") states[[i]]$params$shape =    c(sample(log(max(dist(locs[1:100,])))-log(seq(20, 200, 1)), 1), rnorm(1))
+    if(stationary_covfun == "matern_sphere") states[[i]]$params$shape =       c(sample(log(max(dist(locs[1:100,])))-log(seq(20, 200, 1)), 1), rnorm(1))
+    if(stationary_covfun == "matern_scaledim") states[[i]]$params$shape =     c(sapply(seq(ncol(locs)), function(j)sample(log(max(dist(locs[1:100,j])))-log(seq(20, 200, 1)), 1)), rnorm(1))
+    if(stationary_covfun == "matern_spacetime") states[[i]]$params$shape =    c(sample(log(max(dist(locs[1:100,-ncol(locs)])))-log(seq(20, 200, 1)), 1), sample(log(max(dist(locs[1:100,ncol(locs)])))-log(seq(20, 200, 1)), 1), rnorm(1))
     }
     
     
