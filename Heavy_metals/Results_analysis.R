@@ -139,7 +139,7 @@ covariance_parameters_estimates = estimates$covariance_params$GpGp_covparams
 covariance_parameters_estimates[3,] = covariance_parameters_estimates[3,]*6371
 
 estimates_out  =signif(rbind(covariance_parameters_estimates, fixed_effects_subset), 3)
-xtable::xtable(estimates_out, digits = 5)
+xtable::xtable(estimates_out, digits = 4)
 
 
 ############################
